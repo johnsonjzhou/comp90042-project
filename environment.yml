@@ -1,0 +1,27 @@
+# Note: Tensorflow support is for Apple Silicon
+name: comp90042_project
+channels:
+  - conda-forge
+  - apple
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.8
+  - notebook
+  - ipykernel
+  - pandas
+  - numpy
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - nltk
+  - gensim
+  - spacy
+  - apple::tensorflow-deps==2.9
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pip
+  - pip:
+    - tensorflow-macos==2.9
+    - tensorflow-metal==0.5.0
