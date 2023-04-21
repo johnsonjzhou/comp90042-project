@@ -1,7 +1,9 @@
 # Data files
 project-data/
 data/
+data
 result/
+result
 
 # MacOS
 .DS_Store
