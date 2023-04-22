@@ -4,6 +4,7 @@ data/
 data
 result/
 result
+scratch/
 
 # MacOS
 .DS_Store
