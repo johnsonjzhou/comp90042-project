@@ -32,12 +32,14 @@ def load_from_json(names:list) -> List[dict]:
             print(f"Loaded {name}")
     return datasets
 
-def load_as_dataframe(names:list) -> List[DataFrame]:
+def load_as_dataframe(names:list, full_evidence:bool=False) -> List[DataFrame]:
     """
     Gets the json datasets as dataframes
 
     Args:
         names (list): List of filenames names minus the json suffix.
+        full_evidence (bool): Whether to return the full evidence dataset
+            as the final element.
 
     Returns:
         DefaultDict[str, pd.DataFrame]: Keys as names, values as the dataset
@@ -75,6 +77,10 @@ def load_as_dataframe(names:list) -> List[DataFrame]:
         df = df.reset_index(names=["claim"]) \
             .set_index(keys=["claim", "claim_text", "claim_label", "evidences"])
         datasets_df.append(df)
+
+    # If required, attach the full evidence as the final element
+    if full_evidence and "evidence" in locals():
+        datasets_df.append(locals()["evidence"])
 
     return datasets_df
 
