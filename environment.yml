@@ -17,11 +17,12 @@ dependencies:
   - nltk
   - gensim
   - spacy
-  - apple::tensorflow-deps==2.9
+  - apple::tensorflow-deps==2.9 # Tensorflow Apple Silicon MacOS 12.1+
   - pytorch
   - torchvision
   - torchaudio
+  - sentence-transformers # Hugging Face Apple Silicon
   - pip
   - pip:
-    - tensorflow-macos==2.9
-    - tensorflow-metal==0.5.0
+    - tensorflow-macos==2.9 # Tensorflow Apple Silicon MacOS 12.1+
+    - tensorflow-metal==0.5.0 # Tensorflow Apple Silicon MacOS 12.1+
