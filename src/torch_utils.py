@@ -4,6 +4,7 @@ Ref:
 https://pytorch.org/docs/stable/notes/mps.html
 """
 import torch
+from src.sys_platform import is_apple_silicon
 
 def get_mps_device() -> torch.device:
     """
@@ -36,3 +37,23 @@ def get_mps_device() -> torch.device:
         print("MPS is available")
         mps_device = torch.device("mps")
         return mps_device
+
+def get_torch_device() -> torch.device:
+    """
+    Gets a torch device based on priority:
+    1. Metal Performance Shader (mps)
+    2. CUDA GPU (cuda)
+    3. CPU
+
+    Returns:
+        torch.device: A torch device.
+    """
+    if torch.backends.mps.is_available():
+        print("Torch device is 'mps'")
+        return torch.device("mps")
+
+    if torch.cuda.is_available():
+        print("Torch device is 'cuda'")
+        return torch.device("cuda")
+
+    return torch.device("cpu")
