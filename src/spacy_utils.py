@@ -78,7 +78,7 @@ def repl_special_token(nlp, name):
     ]
     return ReplaceSpecialToken(nlp=nlp, rules=rules)
 
-def process_sentence(text:str, nlp) -> str:
+def process_sentence(text:str, nlp, bert_tokens:bool=False) -> str:
     """
     Preprocessor that:
     - lower case
@@ -89,14 +89,49 @@ def process_sentence(text:str, nlp) -> str:
     Args:
         text (str): Text to transform.
         nlp (spacy model): A spacy nlp model.
+        bert_tokens (bool): Whether to include BERT tokens.
 
     Returns:
         str: Transformed text
     """
+    # If BERT tokens are required, make sure`sentencizer` is in pipeline
+    # if bert_tokens and "sentencizer" not in nlp.pipe_names:
+    #     nlp.add_pipe(factory_name="sentencizer", last=True)
+
     doc = nlp(text.lower())
-    tokens = [
-        token.lemma_
-        for token in doc
-        if not token.is_stop or not token.dep_ == "neg"
-    ]
-    return " ".join(tokens)
+    new_tokens = []
+    for token in doc:
+        # Exclude stop words
+        if token.is_stop:
+            continue
+
+        # Exclude if token is a negator
+        if token.dep_ == "neg":
+            continue
+
+        # Add the lemma of the token text
+        new_tokens.append(token.lemma_)
+
+        # Add whitespace if present
+        if token.whitespace_:
+            new_tokens.append(token.whitespace_)
+
+        # Add the BERT [SEP] token if required
+        if bert_tokens and token.is_sent_end:
+            new_tokens += [" ", "[SEP]", " "]
+
+    # Attach BERT [CLS] token if required
+    if bert_tokens:
+        new_tokens = ["[CLS]", " "] + new_tokens
+
+    new_text = "".join(new_tokens)
+    return new_text
+
+    # Keep below code, it's a bit flawed but seems to give better
+    # Similarity scores for some reason...
+    # tokens = [
+    #     token.lemma_
+    #     for token in doc
+    #     if not token.is_stop or not token.dep_ == "neg"
+    # ]
+    # return " ".join(tokens)
