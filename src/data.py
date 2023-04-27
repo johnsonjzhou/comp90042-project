@@ -6,7 +6,7 @@ import pandas as pd
 from pandas import DataFrame
 import re
 import json
-from typing import List
+from typing import List, Dict, Union
 from collections import defaultdict
 
 # Colors for printing to the terminal
@@ -151,3 +151,30 @@ def get_paired_texts(dataset_df:DataFrame) -> DataFrame:
         .reset_index()[["claim_text", "evidence_text"]]
     )
     return claim_evidence_pairs
+
+def create_claim_output(
+    claim_id:str,
+    claim_text:str,
+    claim_label:str="NOT_ENOUGH_INFO",
+    evidences:List[str] = list()
+) -> Dict[str, Dict[str, Union[str, List[str]]]]:
+    """
+    Generates a consistent claim object to write to JSON.
+
+    Args:
+        claim_id (str): The claim ID.
+        claim_text (str): The claim text.
+        claim_label (str, optional): Claim label. Defaults to "NOT_ENOUGH_INFO".
+        evidences (List[str], optional): List of evidences. Defaults to list().
+
+    Returns:
+        Dict[str, Dict[str, Union[str, List[str]]]]: The claim dict.
+    """
+    claim_dict = {
+        claim_id: {
+            "claim_text": claim_text,
+            "claim_label": claim_label,
+            "evidences": evidences
+        }
+    }
+    return claim_dict

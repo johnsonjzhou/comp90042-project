@@ -10,18 +10,25 @@ Ref:
 import torch
 from torch.utils.data import Dataset
 from torch import nn
-from sentence_transformers import SentenceTransformer, InputExample
+from sentence_transformers import SentenceTransformer, InputExample, \
+    LoggingHandler, util
 import spacy
 from pathlib import Path
-from typing import Callable, Dict
+from typing import Callable
 import pandas as pd
+from pandas import DataFrame
+import numpy as np
 import json
-from src.spacy_utils import process_sentence
 from src.torch_utils import get_torch_device
+from src.spacy_utils import process_sentence
+from src.data import create_claim_output, load_from_json
 from tqdm import tqdm
-import logging
 import random
 from dataclasses import dataclass
+import os
+from pathlib import Path
+import logging
+
 
 class ClaimEvidencePairDataset(Dataset):
     """
@@ -286,6 +293,124 @@ class ClaimEvidenceDataset(Dataset):
         return InputExample(texts=texts, label=label)
 
 
+def run_inference(
+    name:str,
+    model:SentenceTransformer,
+    claims:dict,
+    evidence:dict,
+    scorer:Callable,
+    threshold:float,
+    output_path:Path,
+    batch_size:int=64,
+    device=None,
+    verbose:bool=True
+):
+    # Save paths
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+    claim_embedding_path = output_path.joinpath(f"{name}_claim_embeddings.pt")
+    evidence_embedding_path = \
+        output_path.joinpath(f"evidence_embeddings.pt")
+    output_json = output_path.joinpath(f"{name}_evidence_predictions.json")
+
+    # Get lists of texts
+    claim_texts = [claim["claim_text"] for claim in claims.values()]
+    evidence_texts = list(evidence.values())
+
+    # Create embeddings of claim texts
+    print(f"Generate claim embeddings n={len(claim_texts)}")
+    if os.path.exists(claim_embedding_path):
+        # Load it from file if we have already created it
+        with open(claim_embedding_path, mode="rb") as f:
+            claim_emb = torch.load(f=f, map_location=device)
+            print("Loaded claim embeddings from file")
+    else:
+        # Create the embeddings and save it to file
+        claim_emb = model.encode(
+            sentences=claim_texts,
+            show_progress_bar=True,
+            convert_to_tensor=True,
+            batch_size=batch_size,
+            device=device
+        )
+        with open(claim_embedding_path, mode="wb") as f:
+            torch.save(obj=claim_emb, f=f)
+            print("Saved claim embeddings to file")
+
+    # Create embeddings of evidence texts
+    print(f"Generate evidence embeddings n={len(evidence_texts)}")
+    if os.path.exists(evidence_embedding_path):
+        # Load it from file if we have already created it
+        with open(evidence_embedding_path, mode="rb") as f:
+            evidence_emb = torch.load(f=f, map_location=device)
+            print("Loaded evidence embeddings from file")
+    else:
+        # Create the embeddings and save it to file
+        evidence_emb = model.encode(
+            sentences=evidence_texts,
+            show_progress_bar=True,
+            convert_to_tensor=True,
+            batch_size=batch_size,
+            device=device
+        )
+        with open(evidence_embedding_path, mode="wb") as f:
+            torch.save(obj=evidence_emb, f=f)
+            print("Saved evidence embeddings to file")
+
+    # Calculate the scores
+    print("Calculate scores")
+    scores = scorer(a=claim_emb, b=evidence_emb)
+
+    # For debug purposes keep track of number of evidences retrieved
+    n_evidence_retrieved = list()
+
+    # Holder for the output objects
+    output = dict()
+
+    # Go through each claim and retrieve up to 5 top scoring evidences
+    print("Retrieve top scoring evidences")
+    for claim_id, evidence_scores in tqdm(
+        iterable=zip(claims.keys(), scores),
+        desc="claims",
+        disable=not verbose
+    ):
+        claim_text = claims[claim_id]["claim_text"]
+        df_scores = DataFrame(
+            data={
+                "id": list(evidence.keys()),
+                "score": evidence_scores.cpu().numpy()
+            }
+        )
+
+        # Get related evidences by applying cutoff from threshold
+        related_evidences = (
+            df_scores[df_scores["score"] > threshold]
+            .sort_values(by="score", ascending=False)
+        )
+
+        # Keep track of how many evidences retrieved
+        n_evidence_retrieved.append(related_evidences.shape[0])
+
+        # Get a maximum of the top 5 scoring evidences
+        related_evidences = related_evidences.iloc[:5]
+
+        # Create the output
+        output.update(create_claim_output(
+            claim_id=claim_id,
+            claim_text=claim_text,
+            evidences=related_evidences["id"].to_list()
+        ))
+        continue
+
+    print(f"Average retrievals = {np.mean(n_evidence_retrieved):2f}")
+
+    # Write output to file
+    with open(output_json, mode="w") as f:
+        json.dump(obj=output, fp=f, ensure_ascii=True)
+
+    print("Done!")
+    return
+
 def test_data():
     # Create spacy language model
     nlp = spacy.load("en_core_web_trf")
@@ -333,7 +458,55 @@ def test_data_new():
     pass
 
 
+def dev_inference():
+    """
+    This is equivalent to the jupyter notebook
+    """
+    # Paths
+    ROOT_DIR = Path.cwd()
+    MODEL_PATH = ROOT_DIR.joinpath("./result/models/*")
+    OUTPUT_PATH = ROOT_DIR.joinpath("./result/inference")
+
+    # Names
+    model_save_path = MODEL_PATH.with_name(f"model_01_base_e5_equal_neg")
+    inference_output_path = OUTPUT_PATH.joinpath(model_save_path.name)
+
+    # Logging
+    logging.basicConfig(format='%(asctime)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        level=logging.INFO,
+        handlers=[LoggingHandler()]
+    )
+
+    # Load datasets
+    data_names = ["dev-claims", "test-claims-unlabelled", "evidence"]
+    dev_claims, test_claims, all_evidence = load_from_json(data_names)
+
+    # Load model from file
+    torch_device = get_torch_device()
+    model = SentenceTransformer(
+        model_name_or_path=model_save_path,
+        device=torch_device
+    )
+
+    # Run inference
+    run_inference(
+        name="dev",
+        model=model,
+        claims=dev_claims,
+        evidence=all_evidence,
+        scorer=util.cos_sim,
+        threshold=0.6251,
+        output_path=inference_output_path,
+        batch_size=64,
+        device=torch_device,
+        verbose=True
+    )
+    return
+
+
 if __name__ == "__main__":
     # test_data()
-    test_data_new()
+    # test_data_new()
+    dev_inference()
     pass
