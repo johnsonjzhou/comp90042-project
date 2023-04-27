@@ -9,6 +9,7 @@ dependencies:
   - python=3.8
   - notebook
   - ipykernel
+  - tqdm
   - pandas
   - numpy
   - scikit-learn

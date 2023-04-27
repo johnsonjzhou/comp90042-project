@@ -57,3 +57,37 @@ def get_torch_device() -> torch.device:
         return torch.device("cuda")
 
     return torch.device("cpu")
+
+def min_max_scaler(X:torch.Tensor, dim:int=1) -> torch.Tensor:
+    """
+    Scales an input tensor along the specified dimensions using the
+    min-max scaling method.
+
+    Args:
+        X (torch.Tensor): Input tensor.
+        dim (int, optional): Dimension for scaling. Defaults to 1.
+
+    Returns:
+        torch.Tensor: Scaled tensor.
+    """
+    X_max = torch.max(input=X, dim=dim, keepdim=True).values
+    X_min = torch.min(input=X, dim=dim, keepdim=True).values
+    X_scaled = (X - X_min) / (X_max - X_min)
+    return X_scaled
+
+def standard_scaler(X:torch.Tensor, dim:int=1) -> torch.Tensor:
+    """
+    Scales an input tensor along the specified dimensions using the
+    mean and standard deviation.
+
+    Args:
+        X (torch.Tensor): Input tensor.
+        dim (int, optional): Dimension for scaling. Defaults to 1.
+
+    Returns:
+        torch.Tensor: Scaled tensor.
+    """
+    X_mean = torch.mean(input=X, dim=dim, keepdim=True)
+    X_std = torch.std(input=X, dim=dim, keepdim=True)
+    X_scaled = (X - X_mean) / X_std
+    return X_scaled
