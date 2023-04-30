@@ -22,6 +22,18 @@ class COLORS:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+
+"""
+Help with serialising sets to JSON
+Ref: https://stackoverflow.com/a/8230505
+"""
+class SetEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, set):
+            return list(obj)
+        return json.JSONEncoder.default(self, obj)
+
+
 def load_from_json(names:list) -> List[dict]:
     DATA_PATH = pathlib.Path("data", "*")
     datasets = list()
