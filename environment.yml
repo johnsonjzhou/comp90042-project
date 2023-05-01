@@ -27,3 +27,4 @@ dependencies:
   - pip:
     - tensorflow-macos==2.9 # Tensorflow Apple Silicon MacOS 12.1+
     - tensorflow-metal==0.5.0 # Tensorflow Apple Silicon MacOS 12.1+
+    - torcheval
