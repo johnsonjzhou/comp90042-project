@@ -55,6 +55,14 @@ def repl_special_tokens(text:str) -> str:
         TokenRule(
             pattern=r"\s*(%)",
             repl=" percent"
+        ),
+        TokenRule(
+            pattern=r"(-)(?=[^0-9\s])",
+            repl=""
+        ),
+        TokenRule(
+            pattern=r"[(){}\[\]]+",
+            repl=""
         )
     ]
 
@@ -80,7 +88,8 @@ def lower_case(text:str):
 Creates a normalizing pipeline by using the textacy framework
 """
 normalize_pipeline =  make_pipeline(
-    remove.brackets,
+    # remove.brackets,
+    repl_special_tokens,
     remove.punctuation,
     remove.accents,
     normalize.whitespace,
@@ -89,9 +98,9 @@ normalize_pipeline =  make_pipeline(
     normalize.unicode,
     partial(normalize.repeating_chars, chars=".!?"),
     lower_case,
-    repl_special_tokens
+
 )
 
 if __name__ == "__main__":
-    print(repl_special_tokens('In 1946 PDO switched to a cool phase'))
+    print(repl_special_tokens('[south-australia]'))
     pass
