@@ -2,12 +2,19 @@
 Data I/O functions
 """
 import pathlib
+from pathlib import Path
 import pandas as pd
 from pandas import DataFrame
 import re
 import json
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Tuple
 from collections import defaultdict
+import torch
+from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
+from dataclasses import dataclass
+import random
+from src.torch_utils import get_torch_device
 
 # Colors for printing to the terminal
 # Ref: https://stackoverflow.com/a/287944
@@ -190,3 +197,249 @@ def create_claim_output(
         }
     }
     return claim_dict
+
+
+@dataclass
+class ClaimEvidencePair:
+    claim_id:str
+    evidence_id:str
+    label:int = 0
+
+
+class RetrievalDevEvalDataset(Dataset):
+
+    def __init__(
+        self,
+        dev_claims_path:Path=Path("./data/dev-claims.json"),
+        evidence_path:Path=Path("./data/evidence.json"),
+        pos_label:int=1,
+        neg_label:int=0,
+        n_neg_samples:int=10,
+        seed:int=42,
+        verbose:bool=True,
+        device=None,
+    ) -> None:
+        super(RetrievalDevEvalDataset, self).__init__()
+        self.verbose = verbose
+        self.n_neg_samples = n_neg_samples
+        self.seed = seed
+        self.device = device if device is not None else get_torch_device()
+        self.pos_label = pos_label
+        self.neg_label = neg_label
+
+        # Set the random seed
+        random.seed(a=seed)
+
+        # Load dev claims from json
+        with open(dev_claims_path, mode="r") as f:
+            self.claims = json.load(fp=f)
+
+        # Load evidence library
+        with open(evidence_path, mode="r") as f:
+            self.evidence = json.load(fp=f)
+
+        # Load data
+        self.data = self.__generate_data()
+
+        print(f"generated dataset n={len(self.data)}")
+        return
+
+    def __generate_data(self):
+        # Generate a pool of negative samples
+        neg_evidence_ids = [
+            evidence_id
+            for claim in self.claims.values()
+            for evidence_id in claim["evidences"]
+        ]
+        random.shuffle(neg_evidence_ids)
+
+        # Cumulator
+        data = []
+
+        for claim_id, claim in tqdm(
+            iterable=self.claims.items(),
+            desc="claims",
+            disable=not self.verbose
+        ):
+            # Get positive samples
+            pos_evidence_ids = claim["evidences"]
+
+            for evidence_id in pos_evidence_ids:
+                data.append(ClaimEvidencePair(
+                    claim_id=claim_id,
+                    evidence_id=evidence_id,
+                    label=self.pos_label
+                ))
+
+            # Get negative samples
+            n_picked = 0
+            for neg_evidence_id in neg_evidence_ids:
+                if n_picked >= self.n_neg_samples:
+                    break
+                if neg_evidence_id in pos_evidence_ids:
+                    continue
+                data.append(ClaimEvidencePair(
+                    claim_id=claim_id,
+                    evidence_id=neg_evidence_id,
+                    label=self.neg_label
+                ))
+                n_picked += 1
+
+        return data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx) -> Tuple[Union[str, torch.Tensor]]:
+        text_pair = self.data[idx]
+
+        claim_id = text_pair.claim_id
+        claim_text = self.claims[claim_id]["claim_text"]
+
+        evidence_id = text_pair.evidence_id
+        evidence_text = self.evidence[evidence_id]
+
+        label = torch.tensor(text_pair.label, device=self.device)
+
+        return claim_text, evidence_text, label, claim_id, evidence_id
+
+    @staticmethod
+    def test():
+        dataset = RetrievalDevEvalDataset()
+        for i, data in enumerate(dataset):
+            if i >= 5:
+                break
+            print(data)
+        return
+
+
+class RetrievalWithShortlistDataset(Dataset):
+
+    def __init__(
+        self,
+        claims_paths:List[Path],
+        claims_shortlist_paths:List[Path],
+        evidence_path:Path=Path("./data/evidence.json"),
+        pos_label:int=1,
+        neg_label:int=0,
+        n_neg_samples:int=10,
+        shuffle:bool=False,
+        seed:int=42,
+        verbose:bool=True,
+        device=None,
+    ) -> None:
+        super(RetrievalWithShortlistDataset, self).__init__()
+        self.verbose = verbose
+        self.n_neg_samples = n_neg_samples
+        self.shuffle = shuffle
+        self.seed = seed
+        self.device = device if device is not None else get_torch_device()
+        self.pos_label = pos_label
+        self.neg_label = neg_label
+
+        # Set the random seed
+        random.seed(a=seed)
+
+        # Load train claims from json
+        self.claims = dict()
+        for train_claims_path in claims_paths:
+            with open(train_claims_path, mode="r") as f:
+                self.claims.update(json.load(fp=f))
+
+        # Load train claims shortlist from json
+        self.claims_shortlist = dict()
+        for train_claims_shortlist_path in claims_shortlist_paths:
+            with open(train_claims_shortlist_path, mode="r") as f:
+                self.claims_shortlist.update(json.load(fp=f))
+
+        # Load evidence library
+        with open(evidence_path, mode="r") as f:
+            self.evidence = json.load(fp=f)
+
+        # Load data
+        self.data = self.__generate_data()
+
+        print(f"generated dataset n={len(self.data)}")
+        return
+
+    def __generate_data(self):
+        # Cumulator
+        data = []
+
+        for claim_id, claim in tqdm(
+            iterable=self.claims.items(),
+            desc="claims",
+            disable=not self.verbose
+        ):
+            # Get positive samples
+            pos_evidence_ids = claim["evidences"]
+
+            for evidence_id in pos_evidence_ids:
+                data.append(ClaimEvidencePair(
+                    claim_id=claim_id,
+                    evidence_id=evidence_id,
+                    label=self.pos_label
+                ))
+
+            # Get negative samples
+
+            # Generate a pool of negative samples from shortlist
+            neg_evidence_ids = self.claims_shortlist.get(claim_id, [])
+            if self.shuffle:
+                random.shuffle(neg_evidence_ids)
+
+            n_picked = 0
+            for neg_evidence_id in neg_evidence_ids:
+                if n_picked >= self.n_neg_samples:
+                    break
+                if neg_evidence_id in pos_evidence_ids:
+                    continue
+                data.append(ClaimEvidencePair(
+                    claim_id=claim_id,
+                    evidence_id=neg_evidence_id,
+                    label=self.neg_label
+                ))
+                n_picked += 1
+
+        return data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx) -> Tuple[Union[str, torch.Tensor]]:
+        text_pair = self.data[idx]
+
+        claim_id = text_pair.claim_id
+        claim_text = self.claims[claim_id]["claim_text"]
+
+        evidence_id = text_pair.evidence_id
+        evidence_text = self.evidence[evidence_id]
+
+        label = torch.tensor(text_pair.label, device=self.device)
+
+        return claim_text, evidence_text, label, claim_id, evidence_id
+
+    @staticmethod
+    def test():
+        dataset = RetrievalWithShortlistDataset(
+            claims_paths=[
+                Path("./data/train-claims.json"),
+                Path("./data/dev-claims.json"),
+            ],
+            claims_shortlist_paths=[
+                Path("./result/pipeline/shortlisting_v2/train_retrieved_evidences_max_500_no_rel.json"),
+                Path("./result/pipeline/shortlisting_v2/dev_retrieved_evidences_max_500_no_rel.json"),
+            ],
+            n_neg_samples=999999999,
+        )
+        for i, data in enumerate(dataset):
+            if i >= 5:
+                break
+            print(data)
+        return
+
+
+if __name__ == "__main__":
+    # RetrievalDevEvalDataset.test()
+    # RetrievalWithShortlistDataset.test()
+    pass
