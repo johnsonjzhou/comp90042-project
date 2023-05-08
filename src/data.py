@@ -320,6 +320,7 @@ class RetrievalWithShortlistDataset(Dataset):
         claims_paths:List[Path],
         claims_shortlist_paths:List[Path],
         evidence_path:Path=Path("./data/evidence.json"),
+        claim_id:str=None,
         pos_label:int=1,
         neg_label:int=0,
         n_neg_samples:int=10,
@@ -357,12 +358,12 @@ class RetrievalWithShortlistDataset(Dataset):
             self.evidence = json.load(fp=f)
 
         # Load data
-        self.data = self.__generate_data()
+        self.data = self.__generate_data(target_claim_id=claim_id)
 
         print(f"generated dataset n={len(self.data)}")
         return
 
-    def __generate_data(self):
+    def __generate_data(self, target_claim_id:str=None):
         # Cumulator
         data = []
 
@@ -371,6 +372,10 @@ class RetrievalWithShortlistDataset(Dataset):
             desc="claims",
             disable=not self.verbose
         ):
+            # This is to only return samples for one claim_id if desired
+            if target_claim_id is not None and claim_id != target_claim_id:
+                continue
+
             # Get positive samples
             pos_evidence_ids = claim["evidences"]
 
@@ -546,6 +551,24 @@ class LabelClassificationDataset(Dataset):
                 break
             print(data)
         return
+
+class InferenceClaims(Dataset):
+
+    def __init__(self, claims_path:Path) -> None:
+        super(InferenceClaims, self).__init__()
+        with open(claims_path, mode="r") as f:
+            self.claims = json.load(fp=f)
+            self.claim_ids = list(self.claims.keys())
+            print(f"loaded inference claims n={len(self.claim_ids)}")
+        return
+
+    def __len__(self):
+        return len(self.claim_ids)
+
+    def __getitem__(self, idx) -> Tuple[str]:
+        claim_id = self.claim_ids[idx]
+        claim_text = self.claims[claim_id]["claim_text"]
+        return claim_id, claim_text
 
 
 if __name__ == "__main__":
