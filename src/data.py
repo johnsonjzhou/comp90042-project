@@ -457,6 +457,7 @@ class LabelClassificationDataset(Dataset):
         self,
         claims_paths:List[Path],
         evidence_path:Path=Path("./data/evidence.json"),
+        claim_id:str=None,
         training:bool=False,
         verbose:bool=True,
         device=None,
@@ -477,13 +478,13 @@ class LabelClassificationDataset(Dataset):
             self.evidence = json.load(fp=f)
 
         # Load data
-        self.data = self.__generate_data()
+        self.data = self.__generate_data(target_claim_id=claim_id)
 
         print(f"generated dataset n={len(self.data)}")
 
         pass
 
-    def __generate_data(self):
+    def __generate_data(self, target_claim_id:str=None):
 
         data = []
         for claim_id, claim in tqdm(
@@ -491,11 +492,16 @@ class LabelClassificationDataset(Dataset):
             desc="claims",
             disable=not self.verbose
         ):
+            # This is to only return samples for one claim_id if desired
+            if target_claim_id is not None and claim_id != target_claim_id:
+                continue
+
             # Get evidence ids associated with each claim
             evidence_ids = claim["evidences"]
 
             # Get the claim label
-            label = claim["claim_label"]
+            # label = claim["claim_label"]
+            label = claim.get("claim_label", "NOT_ENOUGH_INFO")
 
             # During training mode, exclude "DISPUTED"
             if self.training and label == "DISPUTED":
@@ -569,6 +575,25 @@ class InferenceClaims(Dataset):
         claim_id = self.claim_ids[idx]
         claim_text = self.claims[claim_id]["claim_text"]
         return claim_id, claim_text
+
+class RetrievedInferenceClaims(Dataset):
+
+    def __init__(self, claims_path:Path) -> None:
+        super(RetrievedInferenceClaims, self).__init__()
+        with open(claims_path, mode="r") as f:
+            self.claims = json.load(fp=f)
+            self.claim_ids = list(self.claims.keys())
+            print(f"loaded inference claims n={len(self.claim_ids)}")
+        return
+
+    def __len__(self):
+        return len(self.claim_ids)
+
+    def __getitem__(self, idx) -> Tuple[str]:
+        claim_id = self.claim_ids[idx]
+        claim_text = self.claims[claim_id]["claim_text"]
+        evidences = self.claims[claim_id]["evidences"]
+        return claim_id, claim_text, evidences
 
 
 if __name__ == "__main__":
