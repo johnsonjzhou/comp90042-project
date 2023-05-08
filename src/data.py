@@ -439,7 +439,117 @@ class RetrievalWithShortlistDataset(Dataset):
         return
 
 
+class LabelClassificationDataset(Dataset):
+
+    LABEL_MAP = {
+        "REFUTES": 0,
+        "NOT_ENOUGH_INFO": 1,
+        "SUPPORTS": 2,
+        # "DISPUTED": # Excluded from training as it is not informative
+    }
+
+    def __init__(
+        self,
+        claims_paths:List[Path],
+        evidence_path:Path=Path("./data/evidence.json"),
+        training:bool=False,
+        verbose:bool=True,
+        device=None,
+    ) -> None:
+        super(LabelClassificationDataset, self).__init__()
+        self.verbose = verbose
+        self.device = device if device is not None else get_torch_device()
+        self.training = training
+
+        # Load train claims from json
+        self.claims = dict()
+        for train_claims_path in claims_paths:
+            with open(train_claims_path, mode="r") as f:
+                self.claims.update(json.load(fp=f))
+
+        # Load evidence library
+        with open(evidence_path, mode="r") as f:
+            self.evidence = json.load(fp=f)
+
+        # Load data
+        self.data = self.__generate_data()
+
+        print(f"generated dataset n={len(self.data)}")
+
+        pass
+
+    def __generate_data(self):
+
+        data = []
+        for claim_id, claim in tqdm(
+            iterable=self.claims.items(),
+            desc="claims",
+            disable=not self.verbose
+        ):
+            # Get evidence ids associated with each claim
+            evidence_ids = claim["evidences"]
+
+            # Get the claim label
+            label = claim["claim_label"]
+
+            # During training mode, exclude "DISPUTED"
+            if self.training and label == "DISPUTED":
+                continue
+
+            # Encode the label
+            # Default state is NEI
+            label_encoding = self.LABEL_MAP.get(label, 1)
+
+            # Assign the labels to each claim/evidence pairs
+            for evidence_id in evidence_ids:
+                data.append(ClaimEvidencePair(
+                    claim_id=claim_id,
+                    evidence_id=evidence_id,
+                    label=label_encoding
+                ))
+
+            continue
+
+        return data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx) -> Tuple[Union[str, torch.Tensor]]:
+        # Fetch the required data rows
+        data = self.data[idx]
+
+        # Get the label
+        label = torch.tensor(data.label, device=self.device)
+
+        # Get text ids
+        claim_id = data.claim_id
+        evidence_id = data.evidence_id
+
+        # Get text
+        claim_text = self.claims[claim_id]["claim_text"]
+        evidence_text = self.evidence[evidence_id]
+
+        return claim_text, evidence_text, label, claim_id, evidence_id
+
+    @staticmethod
+    def test():
+        dataset = LabelClassificationDataset(
+            claims_paths=[
+                Path("./data/train-claims.json"),
+                # Path("./data/dev-claims.json"),
+            ],
+            training=True
+        )
+        for i, data in enumerate(dataset):
+            if i >= 5:
+                break
+            print(data)
+        return
+
+
 if __name__ == "__main__":
     # RetrievalDevEvalDataset.test()
     # RetrievalWithShortlistDataset.test()
+    # LabelClassificationDataset.test()
     pass
