@@ -207,7 +207,10 @@ class ClaimEvidencePair:
 
 
 class RetrievalDevEvalDataset(Dataset):
-
+    """
+    Dataset that can be used for running Eng evaluation on the
+    `dev` set.
+    """
     def __init__(
         self,
         dev_claims_path:Path=Path("./data/dev-claims.json"),
@@ -314,12 +317,16 @@ class RetrievalDevEvalDataset(Dataset):
 
 
 class RetrievalWithShortlistDataset(Dataset):
-
+    """
+    Dataset that can be used for retrieval classification
+    when using a shortlist produced from the shortlisting stage.
+    """
     def __init__(
         self,
         claims_paths:List[Path],
         claims_shortlist_paths:List[Path],
         evidence_path:Path=Path("./data/evidence.json"),
+        inference:bool=False,
         claim_id:str=None,
         pos_label:int=1,
         neg_label:int=0,
@@ -337,6 +344,7 @@ class RetrievalWithShortlistDataset(Dataset):
         self.device = device if device is not None else get_torch_device()
         self.pos_label = pos_label
         self.neg_label = neg_label
+        self.inference = inference
 
         # Set the random seed
         random.seed(a=seed)
@@ -377,16 +385,16 @@ class RetrievalWithShortlistDataset(Dataset):
                 continue
 
             # Get positive samples
-            pos_evidence_ids = claim["evidences"]
-
-            for evidence_id in pos_evidence_ids:
-                data.append(ClaimEvidencePair(
-                    claim_id=claim_id,
-                    evidence_id=evidence_id,
-                    label=self.pos_label
-                ))
-
-            # Get negative samples
+            if self.inference:
+                pos_evidence_ids = []
+            else:
+                pos_evidence_ids = claim["evidences"]
+                for evidence_id in pos_evidence_ids:
+                    data.append(ClaimEvidencePair(
+                        claim_id=claim_id,
+                        evidence_id=evidence_id,
+                        label=self.pos_label
+                    ))
 
             # Generate a pool of negative samples from shortlist
             neg_evidence_ids = self.claims_shortlist.get(claim_id, [])
@@ -432,8 +440,8 @@ class RetrievalWithShortlistDataset(Dataset):
                 Path("./data/dev-claims.json"),
             ],
             claims_shortlist_paths=[
-                Path("./result/pipeline/shortlisting_v2/train_retrieved_evidences_max_500_no_rel.json"),
-                Path("./result/pipeline/shortlisting_v2/dev_retrieved_evidences_max_500_no_rel.json"),
+                Path("./result/train_shortlist_evidences_max_500.json"),
+                Path("./result/dev_shortlist_evidences_max_500.json"),
             ],
             n_neg_samples=999999999,
         )
@@ -445,6 +453,9 @@ class RetrievalWithShortlistDataset(Dataset):
 
 
 class LabelClassificationDataset(Dataset):
+    """
+    Dataset used for label classification.
+    """
 
     LABEL_MAP = {
         "REFUTES": 0,
@@ -559,7 +570,9 @@ class LabelClassificationDataset(Dataset):
         return
 
 class InferenceClaims(Dataset):
-
+    """
+    Dataset used for retrieval inference.
+    """
     def __init__(self, claims_path:Path) -> None:
         super(InferenceClaims, self).__init__()
         with open(claims_path, mode="r") as f:
@@ -577,7 +590,9 @@ class InferenceClaims(Dataset):
         return claim_id, claim_text
 
 class RetrievedInferenceClaims(Dataset):
-
+    """
+    Dataset used for label inference.
+    """
     def __init__(self, claims_path:Path) -> None:
         super(RetrievedInferenceClaims, self).__init__()
         with open(claims_path, mode="r") as f:

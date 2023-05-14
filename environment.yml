@@ -18,6 +18,7 @@ dependencies:
   - nltk
   - gensim
   - spacy
+  - textacy
   - apple::tensorflow-deps==2.9 # Tensorflow Apple Silicon MacOS 12.1+
   - pytorch
   - torchvision
