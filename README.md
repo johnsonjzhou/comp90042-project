@@ -6,7 +6,7 @@ Project under COMP90042 Natural Language Processing at the University of Melbour
 
 ## Dependencies
 
-This project was conducted on an Apple MacBook Pro with M2-max processor and 96 GB of RAM. The included `environment.yml` provides the basic operating environment for **Apple Silicon** devices. The default python version is **3.8**. For `pytorch` models, usage of the Metal Performance Shader (`mps`) device is preferred and selected where available.
+This project was conducted on an Apple MacBook Pro with M2 processor. The included `environment.yml` provides the basic operating environment for **Apple Silicon** devices. The default python version is **3.8**. For `pytorch` models, usage of the Metal Performance Shader (`mps`) device is preferred and selected where available.
 
 ```shell
 # Initialise environment (comp90042_project)
@@ -39,16 +39,31 @@ Implementation of the preprocessing pipeline can be found in [./src/normalize.py
 
 ### Stage 1: Shortlisting
 
-Please refer to [Model 02c: Fast Shortlisting](./04_model/model_02c_fast_shortlisting.ipynb) for the final implementation for this stage.
+Final implementation (with IDF):
+- [Model 02c: Fast Shortlisting](./04_model/model_02c_fast_shortlisting.ipynb) to create shortlists.
+
+Comparison implementation (without IDF):
+- [Model 02a: Fast Shortlisting](./04_model/model_02a_fast_shortlisting.ipynb)
 
 ### Stage 2: Retrieval classification
 
-Please refer to [Model 05: Bert Cross Encoder Retrieval Classifier](./04_model/model_05_bert_cross_encoder_retrieval_classifier.ipynb) for the final implementation for this stage.
+Final implementation (BERT-base):
+- To train: [Model 05: Bert Cross Encoder Retrieval Classifier](./04_model/model_05_bert_cross_encoder_retrieval_classifier.ipynb).
+- To predict: [Infer 05: Bert Cross Encoder Retrieval Classifier](./05_inference/infer_05_bert_cross_encoder_retrieval_classifier.ipynb).
+
+Comparison implementation (RoBERTa-MNLI):
+- To train: [Model 05a: RoBERTa MNLI Cross Encoder Retrieval Classifier](./04_model/model_05a_roberta_mnli_cross_encoder_retrieval_classifier.ipynb).
+- To predict: [Infer 05: Bert Cross Encoder Retrieval Classifier](./05_inference/infer_05_bert_cross_encoder_retrieval_classifier.ipynb).
 
 ### Stage 3: Label classification
 
-Please refer to [Model 06: Bert Cross Encoder Classification](./04_model/model_06_bert_cross_encoder_classification.ipynb) for the final implementation for this stage.
+Final implementation (BERT-base):
+- To train: [Model 06: Bert Cross Encoder Classification](./04_model/model_06_bert_cross_encoder_classification.ipynb).
+- To predict: [Infer 06: Bert Cross Encoder Classification](./05_inference/infer_06_bert_cross_encoder_label_classifier.ipynb).
 
+Comparison implementation (RoBERTa-MNLI):
+- To train: [Model 06a: RoBERTa MNLI Cross Encoder Classification](./04_model/model_06a_roberta_mnli_cross_encoder_classification.ipynb).
+- To predict: [Infer 06: Bert Cross Encoder Classification](./05_inference/infer_06_bert_cross_encoder_label_classifier.ipynb).
 
 
 
